@@ -18,6 +18,7 @@ namespace UIInfoSuite
         private readonly Dictionary<string, string> _options = new Dictionary<string, string>();
 
         public static IMonitor MonitorObject { get; private set; }
+        public static string UniqueId { get; private set; }
 
         private ModOptionsPageHandler _modOptionsPageHandler;
 
@@ -27,6 +28,7 @@ namespace UIInfoSuite
         {
             //Helper = helper;
             MonitorObject = Monitor;
+            UniqueId = ModManifest.UniqueID;
             _skipIntro = new SkipIntro(helper.Events);
 
             Monitor.Log("starting.", LogLevel.Debug);

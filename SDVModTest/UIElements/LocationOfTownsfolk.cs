@@ -25,7 +25,63 @@ namespace UIInfoSuite.UIElements
         private readonly IDictionary<string, string> _options;
         private readonly IModHelper _helper;
 
-        private readonly List<NPC> _townsfolk = new List<NPC>();
+        private readonly IDictionary<string, NPC> _townsfolk = new Dictionary<string, NPC>();
+        private readonly IDictionary<string, NpcData> _npcs = new Dictionary<string, NpcData>();
+
+        private static readonly IDictionary<string, LocationMapping> _locationMappings = new Dictionary<string, LocationMapping>()
+        {
+            { "HarveyRoom", new LocationMapping(677, 304) },
+            { "BathHouse_Pool", new LocationMapping(576, 60) },
+            { "WizardHouseBasement", new LocationMapping(196, 352) },
+            { "BugLand", new LocationMapping(0, 0) },
+            { "Desert", new LocationMapping(60, 92) },
+            { "Cellar", new LocationMapping(0, 0) },
+            { "JojaMart", new LocationMapping(872, 280) },
+            { "Tent", new LocationMapping(784, 128) },
+            { "HaleyHouse", new LocationMapping(652, 408) },
+            { "Hospital", new LocationMapping(677, 304) },
+            { "FarmHouse", new LocationMapping(470, 260) },
+            { "Farm", new LocationMapping(new Rectangle(470, 260, 180, 150), new Rectangle(0, 0, 80, 65)) },
+            { "ScienceHouse", new LocationMapping(732, 148) },
+            { "ManorHouse", new LocationMapping(768, 395) },
+            { "AdventureGuild", new LocationMapping(0, 0) },
+            { "SeedShop", new LocationMapping(696, 296) },
+            { "Blacksmith", new LocationMapping(852, 388) },
+            { "JoshHouse", new LocationMapping(740, 320) },
+            { "SandyHouse", new LocationMapping(40, 40) },
+            { "Tunnel", new LocationMapping(0, 0) },
+            { "CommunityCenter", new LocationMapping(692, 204) },
+            { "Backwoods", new LocationMapping(new Rectangle(460, 156, 140, 120), new Rectangle(0, 0, 50, 40)) },
+            { "ElliottHouse", new LocationMapping(826, 550) },
+            { "SebastianRoom", new LocationMapping(732, 148) },
+            { "BathHouse_Entry", new LocationMapping(576, 60) },
+            { "Greenhouse", new LocationMapping(0, 0) },
+            { "Sewer", new LocationMapping(380, 596) },
+            { "WizardHouse", new LocationMapping(196, 352) },
+            { "Trailer", new LocationMapping(780, 360) },
+            { "Trailer_Big", new LocationMapping(780, 360) },
+            { "Forest", new LocationMapping(new Rectangle(183, 378, 319, 261), new Rectangle(0, 0, 120, 120)) },
+            { "Woods", new LocationMapping(100, 272) },
+            { "WitchSwamp", new LocationMapping(0, 0) },
+            { "ArchaeologyHouse", new LocationMapping(892, 416) },
+            { "FishShop", new LocationMapping(844, 608) },
+            { "Saloon", new LocationMapping(714, 354) },
+            { "LeahHouse", new LocationMapping(452, 436) },
+            { "Town", new LocationMapping(new Rectangle(595, 136, 345, 330), new Rectangle(0, 0, 120, 110)) },
+            { "Mountain", new LocationMapping(762, 154) },
+            { "BusStop", new LocationMapping(new Rectangle(516, 224, 70, 120), new Rectangle(0, 0, 35, 30)) },
+            { "Railroad", new LocationMapping(644, 64) },
+            { "SkullCave", new LocationMapping(0, 0) },
+            { "BathHouse_WomensLocker", new LocationMapping(576, 60) },
+            { "Beach", new LocationMapping(new Rectangle(790, 550, 370, 140), new Rectangle(0, 0, 104, 50)) },
+            { "BathHouse_MensLocker", new LocationMapping(576, 60) },
+            { "Mine", new LocationMapping(880, 100) },
+            { "WitchHut", new LocationMapping(0, 0) },
+            { "AnimalShop", new LocationMapping(420, 392) },
+            { "SamHouse", new LocationMapping(612, 396) },
+            { "WitchWarpCave", new LocationMapping(0, 0) },
+            { "Club", new LocationMapping(60, 92) }
+        };
 
         private static readonly Dictionary<string, KeyValuePair<int, int>> _mapLocations = new Dictionary<string, KeyValuePair<int, int>>()
         {
@@ -103,6 +159,7 @@ namespace UIInfoSuite.UIElements
             _helper.Events.Input.ButtonPressed -= OnButtonPressed_ForSocialPage;
             _helper.Events.Display.MenuChanged -= OnMenuChanged;
             _helper.Events.GameLoop.UpdateTicked -= OnUpdateTicked;
+            _helper.Events.Multiplayer.ModMessageReceived -= OnModMessageReceived;
 
             if (showLocations)
             {
@@ -111,6 +168,7 @@ namespace UIInfoSuite.UIElements
                 _helper.Events.Input.ButtonPressed += OnButtonPressed_ForSocialPage;
                 _helper.Events.Display.MenuChanged += OnMenuChanged;
                 _helper.Events.GameLoop.UpdateTicked += OnUpdateTicked;
+                _helper.Events.Multiplayer.ModMessageReceived += OnModMessageReceived;
             }
         }
 
@@ -172,7 +230,7 @@ namespace UIInfoSuite.UIElements
 
         private void OnUpdateTicked(object sender, UpdateTickedEventArgs e)
         {
-            if (!e.IsOneSecond || (Context.IsSplitScreen && Context.ScreenId != 0))
+            if (!e.IsMultipleOf(30))
                 return;
 
             _townsfolk.Clear();
@@ -181,8 +239,22 @@ namespace UIInfoSuite.UIElements
             {
                 foreach (var character in loc.characters)
                 {
-                    _townsfolk.Add(character);
+                    if (character.isVillager())
+                    {
+                        _townsfolk[character.Name] = character;
+
+                        if (Context.IsMainPlayer)
+                        {
+                            _npcs[character.Name] = new NpcData(character.displayName, character.currentLocation?.Name, character.getTileLocationPoint());
+                        }
+                    }
                 }
+            }
+
+            if (Context.IsMainPlayer && Context.IsMultiplayer)
+            {
+                string[] mods = new string[] { ModEntry.UniqueId };
+                _helper.Multiplayer.SendMessage(_npcs, "NpcSync", mods);
             }
         }
 
@@ -228,72 +300,72 @@ namespace UIInfoSuite.UIElements
             {
                 var namesToShow = new List<string>();
 
-                foreach (var character in _townsfolk)
+                foreach (var npc in _npcs)
                 {
-                    if (!Game1.player.friendshipData.ContainsKey(character.Name))
+                    if (!_townsfolk.TryGetValue(npc.Key, out NPC character))
                         continue;
 
                     try
                     {
                         var hashCode = character.Name.GetHashCode();
 
-                        var drawCharacter = _options.SafeGet(hashCode.ToString()).SafeParseBool();
+                        var drawCharacter = Game1.player.friendshipData.ContainsKey(character.Name) && _options.SafeGet(hashCode.ToString()).SafeParseBool();
 
                         if (drawCharacter)
                         {
-                            var location = new KeyValuePair<int, int>((int)character.Position.X, (int)character.position.Y);
-                            var locationName = character.currentLocation?.Name ?? character.DefaultMap;
+                            var location = new KeyValuePair<int, int>((int)npc.Value.Position.X, (int)npc.Value.Position.Y);
+                            var locationName = npc.Value.LocationName;
 
-                            switch (locationName)
-                            {
-                                case "Town":
-                                case "Forest":
-                                    {
-                                        var xStart = 0;
-                                        var yStart = 0;
-                                        var areaWidth = 0;
-                                        var areaHeight = 0;
+                            //switch (locationName)
+                            //{
+                            //    case "Town":
+                            //    case "Forest":
+                            //        {
+                            //            var xStart = 0;
+                            //            var yStart = 0;
+                            //            var areaWidth = 0;
+                            //            var areaHeight = 0;
 
-                                        switch (locationName)
-                                        {
-                                            case "Town":
-                                                {
-                                                    xStart = 595;
-                                                    yStart = 163;
-                                                    areaWidth = 345;
-                                                    areaHeight = 330;
-                                                    break;
-                                                }
+                            //            switch (locationName)
+                            //            {
+                            //                case "Town":
+                            //                    {
+                            //                        xStart = 595;
+                            //                        yStart = 163;
+                            //                        areaWidth = 345;
+                            //                        areaHeight = 330;
+                            //                        break;
+                            //                    }
 
-                                            case "Forest":
-                                                {
-                                                    xStart = 183;
-                                                    yStart = 378;
-                                                    areaWidth = 319;
-                                                    areaHeight = 261;
-                                                    break;
-                                                }
-                                        }
-                                        var map = character.currentLocation.Map;
+                            //                case "Forest":
+                            //                    {
+                            //                        xStart = 183;
+                            //                        yStart = 378;
+                            //                        areaWidth = 319;
+                            //                        areaHeight = 261;
+                            //                        break;
+                            //                    }
+                            //            }
+                            //            var map = character.currentLocation.Map;
 
-                                        var xScale = areaWidth / (float)map.DisplayWidth;
-                                        var yScale = areaHeight / (float)map.DisplayHeight;
+                            //            var xScale = areaWidth / (float)map.DisplayWidth;
+                            //            var yScale = areaHeight / (float)map.DisplayHeight;
 
-                                        var scaledX = character.position.X * xScale;
-                                        var scaledY = character.position.Y * yScale;
-                                        var xPos = (int)scaledX + xStart;
-                                        var yPos = (int)scaledY + yStart;
-                                        location = new KeyValuePair<int, int>(xPos, yPos);
+                            //            var scaledX = character.position.X * xScale;
+                            //            var scaledY = character.position.Y * yScale;
+                            //            var xPos = (int)scaledX + xStart;
+                            //            var yPos = (int)scaledY + yStart;
+                            //            location = new KeyValuePair<int, int>(xPos, yPos);
 
-                                        break;
-                                    }
+                            //            break;
+                            //        }
 
-                                default:
-                                    {
-                                        _mapLocations.TryGetValue(locationName, out location);
-                                        break;
-                                    }
-                            }
+                            //    default:
+                            //        {
+                            //            _mapLocations.TryGetValue(locationName, out location);
+                            //            break;
+                            //        }
+                            //}
 
                             //if (character.currentLocation.Name == "Town")
                             //{
@@ -317,19 +389,25 @@ namespace UIInfoSuite.UIElements
                             //{
                             //    _mapLocations.TryGetValue(character.currentLocation.name, out location);
                             //}
-                            var headShot = character.GetHeadShot();
-                            var xBase = Game1.activeClickableMenu.xPositionOnScreen - 158;
-                            var yBase = Game1.activeClickableMenu.yPositionOnScreen - 40;
 
-                            var x = xBase + location.Key;
-                            var y = yBase + location.Value;
+                            Point pixels = LocationToMap(locationName, npc.Value.Position.X, npc.Value.Position.Y);
+
+                            var headShot = character.GetHeadShot();
+                            //var xBase = Game1.activeClickableMenu.xPositionOnScreen - 158;
+                            //var yBase = Game1.activeClickableMenu.yPositionOnScreen - 40;
+
+                            //var x = xBase + location.Key;
+                            //var y = yBase + location.Value;
+
+                            pixels.X += Game1.activeClickableMenu.xPositionOnScreen - 158;
+                            pixels.Y += Game1.activeClickableMenu.yPositionOnScreen - 40;
 
                             var color = character.CurrentDialogue.Count <= 0 ?
                                 Color.Gray : Color.White;
                             var textureComponent =
                                 new ClickableTextureComponent(
                                     character.Name,
-                                    new Rectangle(x, y, 0, 0),
+                                    new Rectangle(pixels.X, pixels.Y, 0, 0),
                                     null,
                                     character.Name,
                                     character.Sprite.Texture,
@@ -339,7 +417,7 @@ namespace UIInfoSuite.UIElements
                             var headShotScale = 2f;
                             Game1.spriteBatch.Draw(
                                 character.Sprite.Texture,
-                                new Vector2(x, y),
+                                new Vector2(pixels.X, pixels.Y),
                                 new Rectangle?(headShot),
                                 color,
                                 0.0f,
@@ -351,8 +429,8 @@ namespace UIInfoSuite.UIElements
                             var mouseX = Game1.getMouseX();
                             var mouseY = Game1.getMouseY();
 
-                            if (mouseX >= x && mouseX <= x + headShot.Width * headShotScale &&
-                                mouseY >= y && mouseY <= y + headShot.Height * headShotScale)
+                            if (mouseX >= pixels.X && mouseX <= pixels.X + headShot.Width * headShotScale &&
+                                mouseY >= pixels.Y && mouseY <= pixels.Y + headShot.Height * headShotScale)
                             {
                                 namesToShow.Add(character.displayName);
                             }
@@ -373,7 +451,7 @@ namespace UIInfoSuite.UIElements
                                     if (isQuestTarget)
                                         Game1.spriteBatch.Draw(
                                             Game1.mouseCursors,
-                                            new Vector2(x + 10, y - 12),
+                                            new Vector2(pixels.X + 10, pixels.Y - 12),
                                             new Rectangle(394, 495, 4, 10),
                                             Color.White,
                                             0.0f,
@@ -529,6 +607,89 @@ namespace UIInfoSuite.UIElements
                             Game1.dialogueFont);
                 }
             }
+        }
+
+        private void OnModMessageReceived(object sender, ModMessageReceivedEventArgs e)
+        {
+            if (e.FromModID != ModEntry.UniqueId || e.Type != "NpcSync")
+                return;
+
+            var syncedNpcs = e.ReadAs<Dictionary<string, NpcData>>();
+            foreach (var data in syncedNpcs)
+            {
+                _npcs[data.Key] = data.Value;
+            }
+        }
+
+        private Point LocationToMap(string locationName, int tileX, int tileY)
+        {
+            if (!_locationMappings.TryGetValue(locationName, out LocationMapping locationMap))
+                return new Point(0, 0);
+
+            if (locationMap.TileBounds == null || locationMap.TileBounds.Length == 0)
+                return new Point(locationMap.PixelBounds[0].X, locationMap.PixelBounds[0].Y);
+
+            for (int i = 0; i < locationMap.TileBounds.Length; ++i)
+            {
+                if (!locationMap.TileBounds[i].Contains(tileX, tileY))
+                    continue;
+
+                int x = (int)(locationMap.PixelBounds[i].X + (float)(tileX - locationMap.TileBounds[i].X) / locationMap.TileBounds[i].Width * locationMap.PixelBounds[i].Width);
+                int y = (int)(locationMap.PixelBounds[i].Y + (float)(tileY - locationMap.TileBounds[i].Y) / locationMap.TileBounds[i].Height * locationMap.PixelBounds[i].Height);
+
+                return new Point(x, y);
+            }
+
+            return new Point(locationMap.PixelBounds[0].X, locationMap.PixelBounds[0].Y);
+        }
+    }
+
+    public class NpcData
+    {
+        public string DisplayName;
+        public string LocationName;
+        public Point Position;
+
+        public NpcData()
+        {
+
+        }
+
+        public NpcData(string displayName, string locationName, Point position)
+        {
+            DisplayName = displayName;
+            LocationName = locationName;
+            Position = position;
+        }
+    }
+
+    public class LocationMapping
+    {
+        public Rectangle[] PixelBounds;
+        public Rectangle[] TileBounds;
+
+        public LocationMapping(int pixelX, int pixelY)
+        {
+            PixelBounds = new Rectangle[] { new Rectangle() };
+            PixelBounds[0].X = pixelX;
+            PixelBounds[0].Y = pixelY;
+
+            TileBounds = new Rectangle[0];
+        }
+
+        public LocationMapping(Rectangle pixelBounds, Rectangle tileBounds)
+        {
+            PixelBounds = new Rectangle[] { pixelBounds };
+            TileBounds = new Rectangle[] { tileBounds };
+        }
+
+        public LocationMapping(Rectangle[] pixelBounds, Rectangle[] tileBounds)
+        {
+            if (pixelBounds.Length != tileBounds.Length)
+                throw new ArgumentException("Arguments pixelBounds and tileBounds must be of the same Length.");
+
+            PixelBounds = pixelBounds;
+            TileBounds = tileBounds;
         }
     }
 }
