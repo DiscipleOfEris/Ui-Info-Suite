@@ -124,21 +124,32 @@ namespace UIInfoSuite.UIElements
 
                     if (name.Contains("arecrow"))
                     {
-                        arrayToUse = new int[17][];
-                        for (var i = 0; i < 17; ++i)
+                        if (name.Contains("deluxe"))
                         {
-                            arrayToUse[i] = new int[17];
-                            for (var j = 0; j < 17; ++j)
-                            {
-                                arrayToUse[i][j] = (Math.Abs(i - 8) + Math.Abs(j - 8) <= 12) ? 1 : 0;
-                            }
+                            arrayToUse = _modConfig.DeluxeScarecrow;
                         }
+                        else
+                        {
+                            arrayToUse = _modConfig.Scarecrow;
+                        }
+
                         ParseConfigToHighlightedArea(arrayToUse, (int)validTile.X, (int)validTile.Y);
+
                         objects = GetObjectsInLocationOfSimilarName("arecrow");
                         if (objects != null)
                         {
                             foreach (var next in objects)
                             {
+                                var objectName = next.name.ToLower();
+                                if (objectName.Contains("deluxe"))
+                                {
+                                    arrayToUse = _modConfig.DeluxeScarecrow;
+                                }
+                                else
+                                {
+                                    arrayToUse = _modConfig.Scarecrow;
+                                }
+
                                 ParseConfigToHighlightedArea(arrayToUse, (int)next.TileLocation.X, (int)next.TileLocation.Y);
                             }
                         }
@@ -172,14 +183,16 @@ namespace UIInfoSuite.UIElements
                         {
                             foreach (var next in objects)
                             {
+                                bool hasPressureNozzleAttached = next.heldObject.Value?.ParentSheetIndex == 915;
+
                                 var objectName = next.name.ToLower();
                                 if (objectName.Contains("iridium"))
                                 {
-                                    arrayToUse = _modConfig.IridiumSprinkler;
+                                    arrayToUse = hasPressureNozzleAttached ? _modConfig.PrismaticSprinkler : _modConfig.IridiumSprinkler;
                                 }
                                 else if (objectName.Contains("quality"))
                                 {
-                                    arrayToUse = _modConfig.QualitySprinkler;
+                                    arrayToUse = hasPressureNozzleAttached ? arrayToUse = _modConfig.IridiumSprinkler : _modConfig.QualitySprinkler;
                                 }
                                 else if (name.Contains("prismatic"))
                                 {
@@ -187,7 +200,7 @@ namespace UIInfoSuite.UIElements
                                 }
                                 else
                                 {
-                                    arrayToUse = _modConfig.Sprinkler;
+                                    arrayToUse = hasPressureNozzleAttached ? arrayToUse = _modConfig.QualitySprinkler : _modConfig.Sprinkler;
                                 }
 
                                 if (arrayToUse != null)
